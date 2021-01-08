@@ -1,11 +1,15 @@
 #include <LiquidCrystal.h>
 
-const int rs = 12, en = 11, d4 = 6, d5 = 5, d6 = 4, d7 = 3;
+const int rs = 12, en = 10, d4 = 5, d5 = 4, d6 = 7, d7 = 6;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
-uint8_t PinLapA = A1;
-uint8_t PinLapB = A2;
+uint8_t PullupPinLapA = A0;
+uint8_t PullupPinLapB = A1;
+uint8_t PinLapA = 2;
+uint8_t PinLapB = 3;
+
 uint8_t PinReset = A3;
+uint8_t LcdRW = 11;
 
 byte SymbolAverage[8] = {
   0b00000,
@@ -35,14 +39,23 @@ struct RaceInfo A = {0};
 struct RaceInfo B = {0};
 bool isReset = true;
 
+bool lapA = false;
+bool lapB = false;
+
 void setup()
 {
   Reset(&A);
   Reset(&B);
 
-  pinMode(PinLapA, INPUT_PULLUP);
-  pinMode(PinLapB, INPUT_PULLUP);
+  pinMode(PullupPinLapA, INPUT_PULLUP);
+  pinMode(PullupPinLapB, INPUT_PULLUP);
   pinMode(PinReset, INPUT_PULLUP);
+  pinMode(LcdRW, OUTPUT);
+
+  attachInterrupt(digitalPinToInterrupt(PinLapA), IsrLapA, RISING); 
+  attachInterrupt(digitalPinToInterrupt(PinLapB), IsrLapB, RISING); 
+
+  digitalWrite(LcdRW, LOW);
 
   lcd.begin(20, 4);
   lcd.createChar(1, SymbolAverage);
@@ -50,6 +63,7 @@ void setup()
   ResetLcd();
  
   Serial.begin(112500);
+  Serial.println("Race Timer");
 }
 
 void loop()
@@ -62,11 +76,17 @@ void loop()
     isReset = true;
   }
 
-  if (digitalRead(PinLapA) == LOW)
-   SetLap(&A);
+  if (lapA)
+  {
+    SetLap(&A);
+    lapA = false;
+  }
 
-  if (digitalRead(PinLapB) == LOW)
+  if (lapB)
+  {
     SetLap(&B);
+    lapB = false;
+  }
 
   auto now = millis();
 
@@ -90,7 +110,7 @@ void PrintRace(RaceInfo *info, unsigned long now, uint8_t col)
   {
     lcd.setCursor(3 + col, 0);
     auto elapsed = now - info->LapStart;
-    if (info->CurrentLap > 1 && elapsed < 5000)
+    if (info->CurrentLap > 1 && elapsed < 2500)
       PrintTime(info->LastTime, 2);
     else
     {
@@ -250,4 +270,12 @@ void PrintDigits(int value, byte digits, bool printZero)
   lcd.print(value);
 }
 
+void IsrLapA()
+{
+  lapA = true;
+}
 
+void IsrLapB()
+{
+  lapB = true;
+}
